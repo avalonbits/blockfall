@@ -4,6 +4,7 @@ tmp_dir = "tmp"
 
 [build]
   bin = "./tmp/main"
+  args_bin = ["-debug"]
   cmd = " go build  -o ./tmp/main ./cmd/blockfall"
   delay = 1000
   exclude_dir = ["assets", "tmp", "vendor", "testdata"]

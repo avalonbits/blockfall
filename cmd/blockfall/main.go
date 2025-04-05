@@ -1,15 +1,19 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"image"
 	"image/color"
 	"log"
-	"math/rand/v2"
 
 	"github.com/avalonbits/blockfall/embeded"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+)
+
+var (
+	debug = flag.Bool("debug", false, "If true, enables debug info.")
 )
 
 type shape [][]byte
@@ -115,32 +119,34 @@ const (
 )
 
 const (
-	winY = 1280
-	winX = 720
+	winX = 1280
+	winY = 720
 )
 
+type tileInfo struct {
+	color int
+}
+
 type Game struct {
-	tiles   *embeded.Tiles
-	tileMap [10][20]int
-	style   int
-	count   int
+	tiles    *embeded.Tiles
+	tileSize int
+	tileMap  [10][20]tileInfo
+	tX       int
+	tY       int
 }
 
 func (g *Game) Update() error {
-
 	for i := range len(g.tileMap) {
 		for j := range len(g.tileMap[i]) {
-			if rand.IntN(2) == 0 {
-				g.tileMap[i][j] = 7
-			} else {
-				g.tileMap[i][j] = 5
-			}
+			g.tileMap[i][j].color = min(0, ((i+j)%4)+3)
 		}
 	}
 	return nil
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
+	//	maxX, maxY := screen.Size()
+
 	screen.Fill(color.RGBA{
 		R: 0x20,
 		G: 0x20,
@@ -148,34 +154,40 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	})
 	playArea := screen.SubImage(image.Rectangle{
 		Min: image.Point{
-			X: 8,
-			Y: 8,
+			X: g.tX,
+			Y: g.tY,
 		},
 		Max: image.Point{
-			X: winX - 8,
-			Y: winY - 8,
+			X: winX - g.tX,
+			Y: winY - g.tY,
 		},
 	})
 	playArea.(*ebiten.Image).Fill(color.Black)
 
 	for i := range len(g.tileMap) {
 		for j := range len(g.tileMap[i]) {
-			tile, err := g.tiles.Tile(embeded.Style1, g.tileMap[i][j])
+			color := g.tileMap[i][j].color
+			if color == 0 {
+				continue
+			}
+
+			tile, err := g.tiles.Tile(embeded.Style1, color)
 			if err != nil {
 				panic(err)
 			}
+
 			w, h := tile.Bounds().Dx(), tile.Bounds().Dy()
-			scale := 0.1875
-			wf, hf := float64(w)*scale, float64(h)*scale
+			scaleX, scaleY := float64(g.tileSize)/float64(w), float64(g.tileSize)/float64(h)
 			opts := &ebiten.DrawImageOptions{}
-			opts.GeoM.Scale(scale, scale)
-			opts.GeoM.Translate(64+float64(i)*wf, 64+float64(j)*hf)
+			opts.GeoM.Scale(scaleX, scaleY)
+			opts.GeoM.Translate(float64(g.tX+i*g.tileSize), float64(g.tY+j*g.tileSize))
 			screen.DrawImage(tile, opts)
 		}
 	}
 
-	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("TPS: %0.2f", ebiten.ActualTPS()), 16, 1200)
-
+	if *debug {
+		ebitenutil.DebugPrintAt(screen, fmt.Sprintf("TPS: %0.2f", ebiten.ActualTPS()), 16, 1200)
+	}
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
@@ -183,13 +195,19 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeigh
 }
 
 func main() {
+	flag.Parse()
+
+	const tileScale = float64(min(winY, winX)) / 720.0
+	const tileSize = int(32 * tileScale)
 	g := &Game{
-		tiles: embeded.GetTiles(),
-		style: 1,
+		tiles:    embeded.GetTiles(),
+		tileSize: tileSize,
+		tX:       (winX/2 - 10*tileSize/2),
+		tY:       (winY/2 - 20*tileSize/2),
 	}
 
 	ebiten.SetWindowSize(winX, winY)
-	ebiten.SetWindowTitle("Hello, World! Ebitengine")
+	ebiten.SetWindowTitle("Block Fall")
 	if err := ebiten.RunGame(g); err != nil {
 		log.Fatal(err)
 	}
